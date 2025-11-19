@@ -1,8 +1,9 @@
 // Import required packages
-const express = require("express");  // main web framework
-const cors = require("cors");        // allows frontend to call backend
-const morgan = require("morgan");    // logs HTTP requests
-require("dotenv").config();          // loads variables from .env
+const express = require("express");   // main web framework
+const cors = require("cors");         // allows frontend to call backend
+const morgan = require("morgan");     // logs HTTP requests
+const mongoose = require("mongoose"); // MongoDB connection and models
+require("dotenv").config();           // loads variables from .env
 
 // Create an Express app instance
 const app = express();
@@ -20,21 +21,38 @@ app.use(morgan("dev"));
 
 // ====== TEST ROUTE ====== //
 
-// When someone sends GET request to /api/health, run this function
+// Basic health check route
 app.get("/api/health", (req, res) => {
-  // Send a JSON response
   res.json({
     status: "ok",
-    message: "ApplyTrackr backend is running"
+    message: "ApplyTrackr backend is running",
   });
 });
 
-// ====== START SERVER ====== //
+// ====== DATABASE CONNECTION & SERVER START ====== //
 
-// Read PORT value from environment variables, default to 5000 if not set
+// Read PORT and MONGO_URI from environment variables
 const PORT = process.env.PORT || 5000;
+const MONGO_URI = process.env.MONGO_URI;
 
-// Start the server and listen on PORT
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+// Simple check: fail fast if MONGO_URI is missing
+if (!MONGO_URI) {
+  console.error("❌ MONGO_URI is not defined in .env");
+  process.exit(1); // stop the app
+}
+
+// Connect to MongoDB using Mongoose
+mongoose
+  .connect(MONGO_URI)
+  .then(() => {
+    console.log("✅ Connected to MongoDB");
+
+    // Start the server only after DB connection is successful
+    app.listen(PORT, () => {
+      console.log(`🚀 Server is running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("❌ Error connecting to MongoDB:", err.message);
+    process.exit(1); // stop the app if DB connection fails
+  });
