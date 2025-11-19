@@ -6,7 +6,7 @@ const mongoose = require("mongoose"); // MongoDB connection and models
 require("dotenv").config();           // loads variables from .env
 
 const User = require("./models/user.model"); // Import User model
-
+const bcrypt = require("bcrypt");         // for password hashing
 // Create an Express app instance
 const app = express();
 
@@ -32,10 +32,9 @@ app.get("/api/health", (req, res) => {
 });
 // ====== DEBUG ROUTES (TEMPORARY FOR LEARNING) ====== //
 
-// Create a new user (DEBUG ONLY, plain-text password for now)
+// Create a new user (DEBUG ONLY, but now with hashed password)
 app.post("/api/debug/create-user", async (req, res) => {
   try {
-    // Pull data from request body
     const { name, email, password } = req.body;
 
     // Basic validation: check required fields
@@ -45,24 +44,36 @@ app.post("/api/debug/create-user", async (req, res) => {
         .json({ message: "name, email, and password are required" });
     }
 
-    // Use the User model to create a new document in MongoDB
-    const newUser = await User.create({
-      name,
-      email,
-      password, // NOTE: plain text, we will change this later
-    });
-
-    // Return the created user document
-    return res.status(201).json(newUser);
-  } catch (error) {
-    console.error("Error creating user:", error.message);
-
-    // Duplicate email error from MongoDB
-    if (error.code === 11000) {
+    // Check if a user with this email already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
       return res.status(409).json({ message: "Email already exists" });
     }
 
-    // Generic server error
+    // 1) Hash the password using bcrypt
+    // bcrypt.hash(plainPassword, saltRounds) -> returns hashed string
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
+    // 2) Create the user with the hashed password
+    const newUser = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+    });
+
+    // 3) Remove password before sending user back (even though it's hashed)
+    const userWithoutPassword = {
+      _id: newUser._id,
+      name: newUser.name,
+      email: newUser.email,
+      createdAt: newUser.createdAt,
+      updatedAt: newUser.updatedAt,
+    };
+
+    return res.status(201).json(userWithoutPassword);
+  } catch (error) {
+    console.error("Error creating user:", error.message);
+
     return res.status(500).json({ message: "Server error" });
   }
 });
@@ -71,7 +82,7 @@ app.post("/api/debug/create-user", async (req, res) => {
 app.get("/api/debug/users", async (req, res) => {
   try {
     // Find all users in the collection
-    const users = await User.find();
+    const users = await User.find().select("-password"); // exclude password field
 
     if (!users || users.length === 0) {
       return res.status(404).json({ message: "No users found" });
@@ -89,7 +100,7 @@ app.get("/api/debug/users", async (req, res) => {
 // Read PORT and MONGO_URI from environment variables
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
-
+const SALT_ROUNDS = 10;
 // Simple check: fail fast if MONGO_URI is missing
 if (!MONGO_URI) {
   console.error("❌ MONGO_URI is not defined in .env");
