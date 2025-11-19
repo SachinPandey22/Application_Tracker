@@ -5,6 +5,8 @@ const morgan = require("morgan");     // logs HTTP requests
 const mongoose = require("mongoose"); // MongoDB connection and models
 require("dotenv").config();           // loads variables from .env
 
+const User = require("./models/user.model"); // Import User model
+
 // Create an Express app instance
 const app = express();
 
@@ -28,7 +30,60 @@ app.get("/api/health", (req, res) => {
     message: "ApplyTrackr backend is running",
   });
 });
+// ====== DEBUG ROUTES (TEMPORARY FOR LEARNING) ====== //
 
+// Create a new user (DEBUG ONLY, plain-text password for now)
+app.post("/api/debug/create-user", async (req, res) => {
+  try {
+    // Pull data from request body
+    const { name, email, password } = req.body;
+
+    // Basic validation: check required fields
+    if (!name || !email || !password) {
+      return res
+        .status(400)
+        .json({ message: "name, email, and password are required" });
+    }
+
+    // Use the User model to create a new document in MongoDB
+    const newUser = await User.create({
+      name,
+      email,
+      password, // NOTE: plain text, we will change this later
+    });
+
+    // Return the created user document
+    return res.status(201).json(newUser);
+  } catch (error) {
+    console.error("Error creating user:", error.message);
+
+    // Duplicate email error from MongoDB
+    if (error.code === 11000) {
+      return res.status(409).json({ message: "Email already exists" });
+    }
+
+    // Generic server error
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get all users (DEBUG ONLY)
+app.get("/api/debug/users", async (req, res) => {
+  try {
+    // Find all users in the collection
+    const users = await User.find();
+
+    if (!users || users.length === 0) {
+      return res.status(404).json({ message: "No users found" });
+    }
+
+    // Send them back as JSON
+    return res.json(users);
+  } catch (error) {
+    console.error("Error fetching users:", error.message);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
 // ====== DATABASE CONNECTION & SERVER START ====== //
 
 // Read PORT and MONGO_URI from environment variables
