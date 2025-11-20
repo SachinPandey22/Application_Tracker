@@ -8,6 +8,8 @@ require("dotenv").config();           // loads variables from .env
 const User = require("./models/user.model"); // Import User model
 const bcrypt = require("bcrypt");         // for password hashing
 const jwt = require("jsonwebtoken");     // for generating JWT tokens
+const Application = require("./models/application.model");
+const requireAuth = require("./middleware/auth.middleware");
 const app = express();                     // create Express app
 
 // Read PORT and MONGO_URI from environment variables
@@ -139,6 +141,90 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+
+// Create a new application (protected)
+app.post("/api/applications", requireAuth, async (req, res) => {
+  try {
+    const { company, position, jobLink, status, appliedDate, deadline, notes } = req.body;
+
+    if (!company || !position) {
+      return res.status(400).json({ message: "company and position are required" });
+    }
+
+    const newApp = await Application.create({
+      user: req.userId,     // taken from token
+      company,
+      position,
+      jobLink,
+      status,
+      appliedDate,
+      deadline,
+      notes,
+    });
+
+    return res.status(201).json(newApp);
+  } catch (error) {
+    console.error("Error creating application:", error.message);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Get all applications for logged-in user
+app.get("/api/applications", requireAuth, async (req, res) => {
+  try {
+    const apps = await Application.find({ user: req.userId });
+
+    return res.json(apps);
+  } catch (error) {
+    console.error("Error fetching applications:", error.message);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Update an application
+app.put("/api/applications/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Only update the application if it belongs to the logged-in user
+    const app = await Application.findOneAndUpdate(
+      { _id: id, user: req.userId },
+      req.body,
+      { new: true } // return updated doc
+    );
+
+    if (!app) {
+      return res.status(404).json({ message: "Application not found" });
+    }
+
+    return res.json(app);
+  } catch (error) {
+    console.error("Error updating application:", error.message);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Delete an application
+app.delete("/api/applications/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deleted = await Application.findOneAndDelete({
+      _id: id,
+      user: req.userId,
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Application not found" });
+    }
+
+    return res.json({ message: "Application deleted" });
+  } catch (error) {
+    console.error("Error deleting application:", error.message);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 // // ====== DEBUG ROUTES (TEMPORARY FOR LEARNING) ====== //
 
 // // Create a new user (DEBUG ONLY, but now with hashed password)
@@ -206,7 +292,7 @@ app.post("/api/auth/login", async (req, res) => {
 // });
 
 app.get("/api/users", async (req, res) => {
-  const users = await User.find(); // exclude password field
+  const users = await User.find().select("-password"); // exclude password field
   return res.json(users);});
 // ====== DATABASE CONNECTION & SERVER START ====== //
 
