@@ -169,10 +169,32 @@ app.post("/api/applications", requireAuth, async (req, res) => {
   }
 });
 
-// Get all applications for logged-in user
+// Get all applications for logged-in user, with optional filters and sorting
 app.get("/api/applications", requireAuth, async (req, res) => {
   try {
-    const apps = await Application.find({ user: req.userId });
+    const { status, sortBy, order } = req.query;
+
+    // Base query: only apps belonging to this user
+    const query = { user: req.userId };
+
+    // Optional filter: status
+    if (status) {
+      query.status = status;
+      // e.g., /api/applications?status=applied
+    }
+
+    // Build sort object
+    // default: newest first (createdAt desc)
+    let sortOption = { createdAt: -1 };
+
+    if (sortBy) {
+      const sortField = sortBy; // e.g., "deadline" or "createdAt"
+      const sortOrder = order === "asc" ? 1 : -1; // default desc
+      sortOption = { [sortField]: sortOrder };
+      // e.g., { deadline: 1 } or { createdAt: -1 }
+    }
+
+    const apps = await Application.find(query).sort(sortOption);
 
     return res.json(apps);
   } catch (error) {
