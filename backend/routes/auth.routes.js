@@ -92,25 +92,29 @@ router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Basic validation
+    // Basic validation //actually we don't need this because frontend already does it
     if (!email || !password) {
       return res
         .status(400)
         .json({ message: "email and password are required" });
     }
-
+    if(password.length < 6){
+      return res
+        .status(400)
+        .json({ message: "password must be at least 6 characters long" });
+    }
     // Find user
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({ message: "Invalid email" });
     }
 
     // Compare password with hashed password
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({ message: "Password didn't match for " + user.name });
     }
 
     // Generate token
